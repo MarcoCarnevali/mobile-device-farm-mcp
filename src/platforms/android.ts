@@ -119,6 +119,32 @@ export const ANDROID_TOOLS: Tool[] = [
     },
   },
   {
+    name: 'adb_push',
+    description: 'Push a file to an Android device.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        localPath: { type: 'string' },
+        remotePath: { type: 'string' },
+      },
+      required: ['localPath', 'remotePath'],
+    },
+  },
+  {
+    name: 'adb_pull',
+    description: 'Pull a file from an Android device.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        remotePath: { type: 'string' },
+        localPath: { type: 'string' },
+      },
+      required: ['localPath', 'remotePath'],
+    },
+  },
+  {
     name: 'get_device_info',
     description: 'Get Android device details (Battery, Resolution, SDK, Model).',
     inputSchema: {
@@ -341,6 +367,20 @@ export async function handleAndroidTool(name: string, args: any) {
       return { content: [{ type: 'text', text: output }] };
     }
 
+    case 'adb_push': {
+      const localPath = args?.localPath as string;
+      const remotePath = args?.remotePath as string;
+      await run('adb', [...adbArgs, 'push', localPath, remotePath]);
+      return { content: [{ type: 'text', text: `Successfully pushed ${localPath} to ${remotePath}` }] };
+    }
+
+    case 'adb_pull': {
+      const remotePath = args?.remotePath as string;
+      const localPath = args?.localPath as string;
+      await run('adb', [...adbArgs, 'pull', remotePath, localPath]);
+      return { content: [{ type: 'text', text: `Successfully pulled ${remotePath} to ${localPath}` }] };
+    }
+
     case 'get_device_info': {
       const model = await run('adb', [...adbArgs, 'shell', 'getprop', 'ro.product.model']);
       const androidVer = await run('adb', [
@@ -391,7 +431,9 @@ export async function handleAndroidTool(name: string, args: any) {
             memory = `${Math.round(pssKb / 1024)} MB`;
           }
         }
-      } catch (e) {}
+      } catch {
+        // ignore errors
+      }
 
       let cpu = 'unknown';
       try {
@@ -402,7 +444,9 @@ export async function handleAndroidTool(name: string, args: any) {
           const percent = parts.find((p) => p.includes('%'));
           if (percent) cpu = percent;
         }
-      } catch (e) {}
+      } catch {
+        // ignore errors
+      }
 
       let status = 'Running';
       const errors: string[] = [];
@@ -420,7 +464,9 @@ export async function handleAndroidTool(name: string, args: any) {
             }
           }
         }
-      } catch (e) {}
+      } catch {
+        // ignore errors
+      }
 
       return {
         content: [
@@ -469,7 +515,7 @@ export async function handleAndroidTool(name: string, args: any) {
             },
           ],
         };
-      } catch (e) {
+      } catch {
         return { content: [{ type: 'text', text: 'Offline (Ping command failed)' }] };
       }
     }
