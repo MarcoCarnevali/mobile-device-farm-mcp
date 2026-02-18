@@ -18,7 +18,6 @@ async function run(command: string, args: string[], options: any = {}) {
     const { stdout } = await execa(command, args, options);
     return stdout;
   } catch (error: any) {
-    // If command fails, rethrow with context
     throw new Error(`Command failed: ${command} ${args.join(" ")}\n${error.message}`);
   }
 }
@@ -110,7 +109,7 @@ const TOOLS: Tool[] = [
   },
   {
       name: "get_app_vitals",
-      description: "Get performance stats for an app (CPU, Memory).",
+      description: "Get performance stats (CPU, Memory) and check for recent crashes/ANRs.",
       inputSchema: {
           type: "object",
           properties: {
@@ -315,16 +314,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             // Memory (PSS)
             let memory = "unknown";
             try {
-                // dumpsys meminfo returns formatted text. Grep for "TOTAL".
-                // Output: "    TOTAL    12345    6789 ..."
-                // Note: requires grep which might not be on device, or parsing full output.
-                // We'll run dumpsys meminfo <pkg> and parse locally.
                 const memInfo = (await run("adb", [...adbArgs, "shell", "dumpsys", "meminfo", packageName])) as unknown as string;
-                // Find line starting with "TOTAL" (often indented)
                 const totalLine = memInfo.split("\n").find(l => l.trim().startsWith("TOTAL"));
                 if (totalLine) {
                     const parts = totalLine.trim().split(/\s+/);
-                    // 2nd column is PSS Total (kB)
                     const pssKb = parseInt(parts[1]);
                     if (!isNaN(pssKb)) {
                          memory = `${Math.round(pssKb / 1024)} MB`;
@@ -333,27 +326,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             } catch (e) {}
 
             // CPU
-            // top -n 1 -d 1
             let cpu = "unknown";
             try {
-                // top behavior varies. -b -n 1 is standard for batch mode.
                 const topOut = (await run("adb", [...adbArgs, "shell", "top", "-b", "-n", "1"])) as unknown as string;
                 const appLine = topOut.split("\n").find(l => l.includes(packageName));
                 if (appLine) {
-                    // Find the token ending with %
                     const parts = appLine.trim().split(/\s+/);
                     const percent = parts.find(p => p.includes("%"));
                     if (percent) cpu = percent;
-                    // If no %, it might be raw number depending on `top` version (e.g. 12.3). 
-                    // Usually column 9 is CPU.
+                }
+            } catch (e) {}
+
+            // Crash/Error Detection (Health Check)
+            let status = "Running";
+            const errors: string[] = [];
+            try {
+                const logOut = (await run("adb", [...adbArgs, "logcat", "-d", "-t", "200"])) as unknown as string;
+                if (logOut) {
+                    const lines = logOut.split("\n");
+                    for (const line of lines) {
+                        if (line.includes("FATAL EXCEPTION") && line.includes(packageName)) {
+                            status = "CRASHED";
+                            errors.push(line.trim());
+                        } else if (line.includes(`ANR in ${packageName}`)) {
+                            status = "ANR";
+                            errors.push("Application Not Responding (ANR) detected");
+                        }
+                    }
                 }
             } catch (e) {}
 
             return {
                 content: [{ type: "text", text: JSON.stringify({
                     packageName,
+                    status,
                     memoryPss: memory,
-                    cpuUsage: cpu
+                    cpuUsage: cpu,
+                    recentErrors: errors.length > 0 ? errors : undefined
                 }, null, 2) }]
             };
         }
