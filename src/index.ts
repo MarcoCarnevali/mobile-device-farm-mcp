@@ -157,6 +157,18 @@ const TOOLS: Tool[] = [
       required: ["url"]
     }
   },
+  {
+      name: "set_network_condition",
+      description: "Set network conditions (Android only).",
+      inputSchema: {
+          type: "object",
+          properties: {
+              deviceId: { type: "string" },
+              condition: { type: "string", enum: ["full", "wifi-only", "data-only", "offline"], default: "full" }
+          },
+          required: ["condition"]
+      }
+  },
 
   // --- iOS (Simulators) ---
   {
@@ -451,6 +463,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return {
         content: [{ type: "text", text: filtered.length > 0 ? filtered.join("\n") : "No matching logs found." }]
       };
+    }
+
+    if (name === "set_network_condition") {
+        const condition = args?.condition as string;
+        const deviceId = args?.deviceId as string;
+        const adbArgs = deviceId ? ["-s", deviceId] : [];
+        
+        const commands: string[] = [];
+        
+        switch (condition) {
+            case "full":
+                commands.push("svc wifi enable");
+                commands.push("svc data enable");
+                break;
+            case "wifi-only":
+                commands.push("svc wifi enable");
+                commands.push("svc data disable");
+                break;
+            case "data-only":
+                commands.push("svc wifi disable");
+                commands.push("svc data enable");
+                break;
+            case "offline":
+                commands.push("svc wifi disable");
+                commands.push("svc data disable");
+                break;
+        }
+        
+        // Run commands sequentially
+        // Note: svc commands are separate
+        // adb shell svc wifi disable
+        for (const cmd of commands) {
+            // cmd is like "svc wifi enable"
+            const parts = cmd.split(" ");
+            await run("adb", [...adbArgs, "shell", ...parts]);
+        }
+        
+        return { content: [{ type: "text", text: `Network condition set to: ${condition}` }] };
     }
 
     // --- iOS ---
