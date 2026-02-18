@@ -9,6 +9,7 @@ A Model Context Protocol (MCP) server that gives AI agents direct control over A
 - **Screenshots:** Capture screen content (returns as base64 image to the agent).
 - **Logs:** Fetch `logcat` or system logs.
 - **Touch:** Simulate taps on Android (iOS touch simulation requires more complex setup like `idb`, currently supported via standard Xkcd simctl for basic ops).
+- **File Management:** Push/Pull files on Android and add media to iOS Simulators.
 
 ## Prerequisites
 - **Auto-Detect:** The server attempts to find `adb` in standard macOS/Linux locations if not in PATH.
@@ -126,6 +127,9 @@ This skill provides "recipes" for:
 - `open_deep_link(url, deviceId, platform)`: Open a URL or Deep Link (Android/iOS).
 - `run_monkey(packageName, events)`: Run Chaos Monkey stress test (Android).
 - `record_video(deviceId, durationSec)`: Record screen (Android/iOS).
+- `adb_push(localPath, remotePath)`: Push a file to Android.
+- `adb_pull(remotePath, localPath)`: Pull a file from Android.
+- `ios_add_media(localPath)`: Add photos/videos to iOS Simulator.
 - `list_devices`: List all available targets.
 - `adb_install(apkPath)`: Install an APK.
 - `adb_screenshot(deviceId)`: See what's on screen.
