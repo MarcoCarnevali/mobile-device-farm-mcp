@@ -368,6 +368,45 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
     }
 
+    if (name === "analyze_logs") {
+        const mode = args?.mode as string;
+        const lines = (args?.lines as number) || 500;
+        const deviceId = args?.deviceId as string;
+        const adbArgs = deviceId ? ["-s", deviceId] : [];
+        
+        // Get raw logs
+        const logOut = (await run("adb", [...adbArgs, "logcat", "-d", "-t", lines.toString()])) as unknown as string;
+        const logLines = logOut.split("\n");
+        const filtered: string[] = [];
+        
+        for (const line of logLines) {
+            if (mode === "all") {
+                filtered.push(line);
+                continue;
+            }
+            
+            if (mode === "crash" || mode === "anr") {
+                if (line.includes("FATAL EXCEPTION") || line.includes("AndroidRuntime") || line.includes("System.err")) {
+                    filtered.push(line);
+                }
+                if (mode === "anr" && line.includes("ANR in")) {
+                    filtered.push(line);
+                }
+            }
+            
+            if (mode === "network") {
+                // Heuristic for network logs (OKHttp, Retrofit, etc)
+                if (line.match(/OkHttp|Retrofit|Volley|HTTP|Response|Request/i)) {
+                    filtered.push(line);
+                }
+            }
+        }
+        
+        return { 
+            content: [{ type: "text", text: filtered.length > 0 ? filtered.join("\n") : "No matching logs found." }] 
+        };
+    }
+
     // --- iOS ---
     if (name.startsWith("ios_")) {
         const deviceId = args?.deviceId as string;
