@@ -98,6 +98,28 @@ const TOOLS: Tool[] = [
           required: ["command"]
       }
   },
+  {
+      name: "get_device_info",
+      description: "Get Android device details (Battery, Resolution, SDK, Model).",
+      inputSchema: {
+          type: "object",
+          properties: {
+              deviceId: { type: "string" }
+          }
+      }
+  },
+  {
+      name: "get_app_vitals",
+      description: "Get performance stats for an app (CPU, Memory).",
+      inputSchema: {
+          type: "object",
+          properties: {
+              deviceId: { type: "string" },
+              packageName: { type: "string", description: "App Bundle ID (e.g. com.example.app)" }
+          },
+          required: ["packageName"]
+      }
+  },
 
   // --- iOS (Simulators) ---
   {
@@ -260,6 +282,80 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             const cmd = args?.command as string;
             const output = (await run("adb", [...adbArgs, "shell", cmd])) as unknown as string;
             return { content: [{ type: "text", text: output }] };
+        }
+        
+        if (name === "get_device_info") {
+            const adbArgs = args?.deviceId ? ["-s", args.deviceId as string] : [];
+            const model = (await run("adb", [...adbArgs, "shell", "getprop", "ro.product.model"])) as unknown as string;
+            const androidVer = (await run("adb", [...adbArgs, "shell", "getprop", "ro.build.version.release"])) as unknown as string;
+            const sdk = (await run("adb", [...adbArgs, "shell", "getprop", "ro.build.version.sdk"])) as unknown as string;
+            const wmSize = (await run("adb", [...adbArgs, "shell", "wm", "size"])) as unknown as string;
+            
+            // Battery info is multiline
+            const batteryDump = (await run("adb", [...adbArgs, "shell", "dumpsys", "battery"])) as unknown as string;
+            const levelMatch = batteryDump.match(/level: (\d+)/);
+            const level = levelMatch ? levelMatch[1] : "unknown";
+
+            return {
+                content: [{ type: "text", text: JSON.stringify({
+                    model: model.trim(),
+                    androidVersion: androidVer.trim(),
+                    sdkLevel: sdk.trim(),
+                    resolution: wmSize.trim(),
+                    batteryLevel: `${level}%`
+                }, null, 2) }]
+            };
+        }
+
+        if (name === "get_app_vitals") {
+            const packageName = args?.packageName as string;
+            const adbArgs = args?.deviceId ? ["-s", args.deviceId as string] : [];
+            if (!packageName) throw new Error("packageName required");
+
+            // Memory (PSS)
+            let memory = "unknown";
+            try {
+                // dumpsys meminfo returns formatted text. Grep for "TOTAL".
+                // Output: "    TOTAL    12345    6789 ..."
+                // Note: requires grep which might not be on device, or parsing full output.
+                // We'll run dumpsys meminfo <pkg> and parse locally.
+                const memInfo = (await run("adb", [...adbArgs, "shell", "dumpsys", "meminfo", packageName])) as unknown as string;
+                // Find line starting with "TOTAL" (often indented)
+                const totalLine = memInfo.split("\n").find(l => l.trim().startsWith("TOTAL"));
+                if (totalLine) {
+                    const parts = totalLine.trim().split(/\s+/);
+                    // 2nd column is PSS Total (kB)
+                    const pssKb = parseInt(parts[1]);
+                    if (!isNaN(pssKb)) {
+                         memory = `${Math.round(pssKb / 1024)} MB`;
+                    }
+                }
+            } catch (e) {}
+
+            // CPU
+            // top -n 1 -d 1
+            let cpu = "unknown";
+            try {
+                // top behavior varies. -b -n 1 is standard for batch mode.
+                const topOut = (await run("adb", [...adbArgs, "shell", "top", "-b", "-n", "1"])) as unknown as string;
+                const appLine = topOut.split("\n").find(l => l.includes(packageName));
+                if (appLine) {
+                    // Find the token ending with %
+                    const parts = appLine.trim().split(/\s+/);
+                    const percent = parts.find(p => p.includes("%"));
+                    if (percent) cpu = percent;
+                    // If no %, it might be raw number depending on `top` version (e.g. 12.3). 
+                    // Usually column 9 is CPU.
+                }
+            } catch (e) {}
+
+            return {
+                content: [{ type: "text", text: JSON.stringify({
+                    packageName,
+                    memoryPss: memory,
+                    cpuUsage: cpu
+                }, null, 2) }]
+            };
         }
     }
 

@@ -49,6 +49,8 @@ A Model Context Protocol (MCP) server that gives AI agents direct control over A
 - `adb_install(apkPath)`: Install an APK.
 - `adb_screenshot(deviceId)`: See what's on screen.
 - `adb_tap(x, y)`: Touch the screen.
+- `get_device_info(deviceId)`: Get battery, SDK version, resolution.
+- `get_app_vitals(packageName)`: Check CPU and Memory usage.
 - `ios_install(appPath)`: Install an .app bundle on Simulator.
 - `ios_launch(bundleId)`: Start an app.
 
