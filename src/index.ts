@@ -1,0 +1,329 @@
+#!/usr/bin/env node
+
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  Tool,
+} from "@modelcontextprotocol/sdk/types.js";
+import { execa } from "execa";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+// Helper: Run shell command safely
+async function run(command: string, args: string[], options: any = {}) {
+  try {
+    const { stdout } = await execa(command, args, options);
+    return stdout;
+  } catch (error: any) {
+    // If command fails, rethrow with context
+    throw new Error(`Command failed: ${command} ${args.join(" ")}\n${error.message}`);
+  }
+}
+
+// === TOOLS ===
+
+const TOOLS: Tool[] = [
+  // --- Discovery ---
+  {
+    name: "list_devices",
+    description: "List all connected Android devices (ADB) and iOS Simulators (xcrun).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        platform: { type: "string", enum: ["all", "android", "ios"], default: "all" },
+      },
+    },
+  },
+
+  // --- Android (ADB) ---
+  {
+    name: "adb_install",
+    description: "Install an APK on an Android device.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deviceId: { type: "string", description: "Target device serial (optional if only one connected)" },
+        apkPath: { type: "string", description: "Local path to .apk file" },
+      },
+      required: ["apkPath"],
+    },
+  },
+  {
+    name: "adb_screenshot",
+    description: "Capture a screenshot from an Android device (returns base64 PNG).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deviceId: { type: "string", description: "Target device serial" },
+      },
+    },
+  },
+  {
+    name: "adb_logcat",
+    description: "Get recent logs from an Android device (last N lines).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deviceId: { type: "string", description: "Target device serial" },
+        lines: { type: "number", default: 100 },
+        filter: { type: "string", description: "Optional grep filter" }
+      },
+    },
+  },
+  {
+    name: "adb_tap",
+    description: "Simulate a tap on Android screen coordinates.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deviceId: { type: "string" },
+        x: { type: "number" },
+        y: { type: "number" },
+      },
+      required: ["x", "y"],
+    },
+  },
+  {
+      name: "adb_shell",
+      description: "Run a raw ADB shell command (use carefully).",
+      inputSchema: {
+          type: "object",
+          properties: {
+              deviceId: { type: "string" },
+              command: { type: "string", description: "Command to run inside 'adb shell'" }
+          },
+          required: ["command"]
+      }
+  },
+
+  // --- iOS (Simulators) ---
+  {
+    name: "ios_install",
+    description: "Install an .app bundle on an iOS Simulator.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deviceId: { type: "string", description: "Simulator UDID" },
+        appPath: { type: "string", description: "Path to .app bundle" },
+      },
+      required: ["deviceId", "appPath"],
+    },
+  },
+  {
+    name: "ios_screenshot",
+    description: "Capture a screenshot from an iOS Simulator (returns base64 PNG).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deviceId: { type: "string", description: "Simulator UDID (must be booted)" },
+      },
+      required: ["deviceId"],
+    },
+  },
+  {
+    name: "ios_launch",
+    description: "Launch an installed app on iOS Simulator.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deviceId: { type: "string", description: "Simulator UDID" },
+        bundleId: { type: "string", description: "App Bundle ID (e.g. com.example.app)" },
+      },
+      required: ["deviceId", "bundleId"],
+    },
+  },
+];
+
+// === SERVER ===
+
+const server = new Server(
+  {
+    name: "mobile-device-farm-mcp",
+    version: "1.0.0",
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: TOOLS,
+}));
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  try {
+    // --- Discovery ---
+    if (name === "list_devices") {
+      const platform = (args?.platform as string) || "all";
+      const devices: any[] = [];
+
+      // Android
+      if (platform === "all" || platform === "android") {
+        try {
+          const adbOut = (await run("adb", ["devices", "-l"])) as unknown as string;
+          if (adbOut) {
+            const lines = adbOut.split("\n").slice(1); // Skip header
+            for (const line of lines) {
+              if (line.trim() && !line.includes("offline")) {
+                const parts = line.split(/\s+/);
+                devices.push({
+                  platform: "android",
+                  id: parts[0],
+                  state: parts[1],
+                  details: line.substring(line.indexOf(parts[2] || "")).trim()
+                });
+              }
+            }
+          }
+        } catch (e) {
+          // ADB might not be installed or in path
+        }
+      }
+
+      // iOS
+      if (platform === "all" || platform === "ios") {
+        try {
+          const simOut = (await run("xcrun", ["simctl", "list", "devices", "available", "--json"])) as unknown as string;
+          const simJson = JSON.parse(simOut);
+          
+          for (const runtime in simJson.devices) {
+            const runtimeName = runtime.replace("com.apple.CoreSimulator.SimRuntime.", "");
+            for (const dev of simJson.devices[runtime]) {
+              if (dev.state === "Booted") { 
+                 devices.push({
+                   platform: "ios",
+                   id: dev.udid,
+                   name: dev.name,
+                   state: dev.state,
+                   runtime: runtimeName
+                 });
+              }
+            }
+          }
+        } catch (e) {
+          // Xcode might not be installed
+        }
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(devices, null, 2) }],
+      };
+    }
+
+    // --- Android ---
+    if (name.startsWith("adb_")) {
+        const deviceId = args?.deviceId as string;
+        const adbArgs = deviceId ? ["-s", deviceId] : [];
+
+        if (name === "adb_install") {
+            const apkPath = args?.apkPath as string;
+            await run("adb", [...adbArgs, "install", "-r", apkPath]);
+            return { content: [{ type: "text", text: `Successfully installed ${apkPath}` }] };
+        }
+
+        if (name === "adb_screenshot") {
+            // execa v9 buffer encoding
+            const { stdout } = await execa("adb", [...adbArgs, "exec-out", "screencap", "-p"], { encoding: 'buffer', stripFinalNewline: false });
+            const base64 = (stdout as unknown as Buffer).toString("base64");
+            return {
+                content: [
+                    { type: "text", text: "Screenshot captured:" },
+                    { type: "image", data: base64, mimeType: "image/png" } 
+                ]
+            };
+        }
+
+        if (name === "adb_logcat") {
+            const lines = (args?.lines as number) || 100;
+            const filter = (args?.filter as string) || "";
+            const cmd = ["logcat", "-d", "-t", lines.toString()];
+            if (filter) cmd.push(filter);
+            
+            const logs = (await run("adb", [...adbArgs, ...cmd])) as unknown as string;
+            return { content: [{ type: "text", text: logs }] };
+        }
+
+        if (name === "adb_tap") {
+            const { x, y } = args as any;
+            await run("adb", [...adbArgs, "shell", "input", "tap", x, y]);
+            return { content: [{ type: "text", text: `Tapped at ${x},${y}` }] };
+        }
+        
+        if (name === "adb_shell") {
+            const cmd = args?.command as string;
+            const output = (await run("adb", [...adbArgs, "shell", cmd])) as unknown as string;
+            return { content: [{ type: "text", text: output }] };
+        }
+    }
+
+    // --- iOS ---
+    if (name.startsWith("ios_")) {
+        const deviceId = args?.deviceId as string;
+        if (!deviceId) throw new Error("deviceId (UDID) is required for iOS tools.");
+
+        if (name === "ios_install") {
+            const appPath = args?.appPath as string;
+            await run("xcrun", ["simctl", "install", deviceId, appPath]);
+            return { content: [{ type: "text", text: `Installed ${appPath} on ${deviceId}` }] };
+        }
+
+        if (name === "ios_screenshot") {
+            const fs = await import("fs");
+            const path = await import("path");
+            const os = await import("os");
+            const tempFile = path.join(os.tmpdir(), `ios_screen_${Date.now()}.png`);
+            
+            await run("xcrun", ["simctl", "io", deviceId, "screenshot", tempFile]);
+            const buffer = fs.readFileSync(tempFile);
+            fs.unlinkSync(tempFile);
+            
+            const base64 = buffer.toString("base64");
+            return {
+                content: [
+                    { type: "text", text: "Screenshot captured:" },
+                    { type: "image", data: base64, mimeType: "image/png" }
+                ]
+            };
+        }
+        
+        if (name === "ios_launch") {
+            const bundleId = args?.bundleId as string;
+            await run("xcrun", ["simctl", "launch", deviceId, bundleId]);
+            return { content: [{ type: "text", text: `Launched ${bundleId}` }] };
+        }
+    }
+
+    return {
+      content: [{ type: "text", text: `Tool ${name} not implemented.` }],
+      isError: true,
+    };
+  } catch (error: any) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error executing ${name}: ${error.message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+});
+
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("Mobile Device Farm MCP Server running on stdio");
+}
+
+main().catch((error) => {
+  console.error("Fatal error:", error);
+  process.exit(1);
+});
