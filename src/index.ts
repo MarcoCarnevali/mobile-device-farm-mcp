@@ -158,6 +158,35 @@ const TOOLS: Tool[] = [
     }
   },
 
+  {
+      name: "clear_app_data",
+      description: "Clear app data and cache (resets app to fresh install state).",
+      inputSchema: {
+          type: "object",
+          properties: {
+              deviceId: { type: "string" },
+              packageName: { type: "string", description: "App Bundle ID (e.g. com.example.app)" },
+              platform: { type: "string", enum: ["android", "ios"], default: "android" }
+          },
+          required: ["packageName"]
+      }
+  },
+  {
+      name: "manage_permission",
+      description: "Grant or revoke app permissions.",
+      inputSchema: {
+          type: "object",
+          properties: {
+              deviceId: { type: "string" },
+              packageName: { type: "string" },
+              action: { type: "string", enum: ["grant", "revoke"] },
+              permission: { type: "string", description: "Android: android.permission.CAMERA, iOS: camera/photos/location" },
+              platform: { type: "string", enum: ["android", "ios"], default: "android" }
+          },
+          required: ["packageName", "action", "permission"]
+      }
+  },
+
   // --- iOS (Simulators) ---
   {
     name: "ios_install",
@@ -451,6 +480,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return {
         content: [{ type: "text", text: filtered.length > 0 ? filtered.join("\n") : "No matching logs found." }]
       };
+    }
+
+    if (name === "clear_app_data") {
+        const packageName = args?.packageName as string;
+        const platform = (args?.platform as string) || "android";
+        const deviceId = args?.deviceId as string;
+        
+        if (platform === "android") {
+            const adbArgs = deviceId ? ["-s", deviceId] : [];
+            await run("adb", [...adbArgs, "shell", "pm", "clear", packageName]);
+            return { content: [{ type: "text", text: `Cleared data for ${packageName}` }] };
+        } else {
+            return { content: [{ type: "text", text: "Clear data not supported on iOS (try uninstall/install)" }], isError: true };
+        }
+    }
+
+    if (name === "manage_permission") {
+        const packageName = args?.packageName as string;
+        const action = args?.action as string;
+        const permission = args?.permission as string;
+        const platform = (args?.platform as string) || "android";
+        const deviceId = args?.deviceId as string;
+
+        if (platform === "android") {
+            const adbArgs = deviceId ? ["-s", deviceId] : [];
+            await run("adb", [...adbArgs, "shell", "pm", action, packageName, permission]);
+            return { content: [{ type: "text", text: `${action} ${permission} for ${packageName}` }] };
+        } else if (platform === "ios") {
+            if (!deviceId) throw new Error("deviceId required for iOS");
+            await run("xcrun", ["simctl", "privacy", deviceId, action, permission, packageName]);
+            return { content: [{ type: "text", text: `${action} ${permission} for ${packageName} on iOS` }] };
+        }
     }
 
     // --- iOS ---
