@@ -47,6 +47,7 @@ A Model Context Protocol (MCP) server that gives AI agents direct control over A
 ## Tools
 - `analyze_logs(deviceId, mode)`: Get logs filtered by mode (crash, anr, network).
 - `open_deep_link(url, deviceId, platform)`: Open a URL or Deep Link (Android/iOS).
+- `run_monkey(packageName, events)`: Run Chaos Monkey stress test (Android).
 - `list_devices`: List all available targets.
 - `adb_install(apkPath)`: Install an APK.
 - `adb_screenshot(deviceId)`: See what's on screen.
