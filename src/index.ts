@@ -158,6 +158,19 @@ const TOOLS: Tool[] = [
     }
   },
 
+  {
+      name: "type_text",
+      description: "Type text on the device keyboard (Android only).",
+      inputSchema: {
+          type: "object",
+          properties: {
+              deviceId: { type: "string" },
+              text: { type: "string" }
+          },
+          required: ["text"]
+      }
+  },
+
   // --- iOS (Simulators) ---
   {
     name: "ios_install",
@@ -451,6 +464,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return {
         content: [{ type: "text", text: filtered.length > 0 ? filtered.join("\n") : "No matching logs found." }]
       };
+    }
+
+    if (name === "type_text") {
+        const text = args?.text as string;
+        const deviceId = args?.deviceId as string;
+        const adbArgs = deviceId ? ["-s", deviceId] : [];
+        
+        // Escape spaces for Android shell input
+        // "Hello World" -> "Hello%sWorld"
+        const escaped = text.replace(/\s/g, "%s").replace(/'/g, "\\'");
+        
+        await run("adb", [...adbArgs, "shell", "input", "text", escaped]);
+        return { content: [{ type: "text", text: `Typed: ${text}` }] };
     }
 
     // --- iOS ---
