@@ -9,8 +9,33 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { execa } from "execa";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
+import os from "os";
 
 dotenv.config();
+
+// Helper: Auto-detect Android SDK if not in PATH
+function detectAndroidSdk() {
+  const home = os.homedir();
+  const commonPaths = [
+    path.join(home, "Library/Android/sdk/platform-tools"), // macOS
+    path.join(home, "Android/Sdk/platform-tools"),         // Linux
+    "/opt/android-sdk/platform-tools",
+    "/usr/local/share/android-sdk/platform-tools"
+  ];
+
+  for (const p of commonPaths) {
+    if (fs.existsSync(path.join(p, "adb"))) {
+      console.error(`Found Android SDK at: ${p}`);
+      process.env.PATH = `${p}:${process.env.PATH}`;
+      return;
+    }
+  }
+}
+
+// Initialize SDK detection on start
+detectAndroidSdk();
 
 // Helper: Run shell command safely
 async function run(command: string, args: string[], options: any = {}) {
