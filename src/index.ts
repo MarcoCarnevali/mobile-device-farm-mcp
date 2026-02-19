@@ -175,6 +175,7 @@ const TOOLS: Tool[] = [
       properties: {
         deviceId: { type: "string" },
         packageName: { type: "string", description: "App Bundle ID (e.g. com.example.app)" },
+        platform: { type: "string", enum: ["android", "ios"], default: "android" },
         durationSec: { type: "number", default: 10, description: "Test duration in seconds" }
       },
       required: ["packageName"]
@@ -503,6 +504,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === "test_performance") {
       const packageName = args?.packageName as string;
       const deviceId = args?.deviceId as string;
+      const platform = (args?.platform as string) || "android";
       const durationSec = (args?.durationSec as number) || 10;
       const adbArgs = deviceId ? ["-s", deviceId] : [];
 
@@ -513,31 +515,53 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const intervalMs = 1000;
       const samples = durationSec;
 
-      for (let i = 0; i < samples; i++) {
-        try {
-          const topOut = (await run("adb", [...adbArgs, "shell", "top", "-b", "-n", "1"])) as unknown as string;
-          const appLine = topOut.split("\n").find(l => l.includes(packageName));
-          if (appLine) {
-            const parts = appLine.trim().split(/\s+/);
-            const cpuMatch = parts.find(p => p.includes("%"));
-            if (cpuMatch) {
-              const cpuVal = parseFloat(cpuMatch.replace("%", ""));
-              if (!isNaN(cpuVal)) cpuSamples.push(cpuVal);
+      if (platform === "android") {
+        for (let i = 0; i < samples; i++) {
+          try {
+            const topOut = (await run("adb", [...adbArgs, "shell", "top", "-b", "-n", "1"])) as unknown as string;
+            const appLine = topOut.split("\n").find(l => l.includes(packageName));
+            if (appLine) {
+              const parts = appLine.trim().split(/\s+/);
+              const cpuMatch = parts.find(p => p.includes("%"));
+              if (cpuMatch) {
+                const cpuVal = parseFloat(cpuMatch.replace("%", ""));
+                if (!isNaN(cpuVal)) cpuSamples.push(cpuVal);
+              }
             }
-          }
-        } catch (e) {}
+          } catch (e) {}
 
-        try {
-          const memInfo = (await run("adb", [...adbArgs, "shell", "dumpsys", "meminfo", packageName])) as unknown as string;
-          const totalLine = memInfo.split("\n").find(l => l.trim().startsWith("TOTAL"));
-          if (totalLine) {
-            const parts = totalLine.trim().split(/\s+/);
-            const pssKb = parseInt(parts[1]);
-            if (!isNaN(pssKb)) memorySamples.push(Math.round(pssKb / 1024));
-          }
-        } catch (e) {}
+          try {
+            const memInfo = (await run("adb", [...adbArgs, "shell", "dumpsys", "meminfo", packageName])) as unknown as string;
+            const totalLine = memInfo.split("\n").find(l => l.trim().startsWith("TOTAL"));
+            if (totalLine) {
+              const parts = totalLine.trim().split(/\s+/);
+              const pssKb = parseInt(parts[1]);
+              if (!isNaN(pssKb)) memorySamples.push(Math.round(pssKb / 1024));
+            }
+          } catch (e) {}
 
-        await new Promise(resolve => setTimeout(resolve, intervalMs));
+          await new Promise(resolve => setTimeout(resolve, intervalMs));
+        }
+      } else if (platform === "ios") {
+        if (!deviceId) throw new Error("deviceId (UDID) is required for iOS");
+
+        for (let i = 0; i < samples; i++) {
+          try {
+            const psOut = (await run("xcrun", ["simctl", "spawn", deviceId, "ps", "aux"])) as unknown as string;
+            const appLine = psOut.split("\n").find(l => l.includes(packageName));
+            if (appLine) {
+              const parts = appLine.split(/\s+/);
+              const cpuIdx = 2;
+              const memIdx = 3;
+              const cpuVal = parseFloat(parts[cpuIdx]);
+              const memVal = parseFloat(parts[memIdx]);
+              if (!isNaN(cpuVal)) cpuSamples.push(cpuVal);
+              if (!isNaN(memVal)) memorySamples.push(Math.round(memVal * 1024 / 100));
+            }
+          } catch (e) {}
+
+          await new Promise(resolve => setTimeout(resolve, intervalMs));
+        }
       }
 
       const avgCpu = cpuSamples.length > 0 ? (cpuSamples.reduce((a, b) => a + b, 0) / cpuSamples.length).toFixed(1) : "N/A";
@@ -550,6 +574,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           type: "text",
           text: JSON.stringify({
             packageName,
+            platform,
             durationSec,
             samples,
             cpu: {
