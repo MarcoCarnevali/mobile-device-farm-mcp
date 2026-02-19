@@ -168,6 +168,19 @@ const TOOLS: Tool[] = [
     }
   },
   {
+    name: "test_performance",
+    description: "Run a performance test on an app, measuring CPU and memory over time.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deviceId: { type: "string" },
+        packageName: { type: "string", description: "App Bundle ID (e.g. com.example.app)" },
+        durationSec: { type: "number", default: 10, description: "Test duration in seconds" }
+      },
+      required: ["packageName"]
+    }
+  },
+  {
     name: "open_deep_link",
     description: "Open a deep link or URL on the device.",
     inputSchema: {
@@ -485,6 +498,73 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }]
         };
       }
+    }
+
+    if (name === "test_performance") {
+      const packageName = args?.packageName as string;
+      const deviceId = args?.deviceId as string;
+      const durationSec = (args?.durationSec as number) || 10;
+      const adbArgs = deviceId ? ["-s", deviceId] : [];
+
+      if (!packageName) throw new Error("packageName required");
+
+      const cpuSamples: number[] = [];
+      const memorySamples: number[] = [];
+      const intervalMs = 1000;
+      const samples = durationSec;
+
+      for (let i = 0; i < samples; i++) {
+        try {
+          const topOut = (await run("adb", [...adbArgs, "shell", "top", "-b", "-n", "1"])) as unknown as string;
+          const appLine = topOut.split("\n").find(l => l.includes(packageName));
+          if (appLine) {
+            const parts = appLine.trim().split(/\s+/);
+            const cpuMatch = parts.find(p => p.includes("%"));
+            if (cpuMatch) {
+              const cpuVal = parseFloat(cpuMatch.replace("%", ""));
+              if (!isNaN(cpuVal)) cpuSamples.push(cpuVal);
+            }
+          }
+        } catch (e) {}
+
+        try {
+          const memInfo = (await run("adb", [...adbArgs, "shell", "dumpsys", "meminfo", packageName])) as unknown as string;
+          const totalLine = memInfo.split("\n").find(l => l.trim().startsWith("TOTAL"));
+          if (totalLine) {
+            const parts = totalLine.trim().split(/\s+/);
+            const pssKb = parseInt(parts[1]);
+            if (!isNaN(pssKb)) memorySamples.push(Math.round(pssKb / 1024));
+          }
+        } catch (e) {}
+
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+      }
+
+      const avgCpu = cpuSamples.length > 0 ? (cpuSamples.reduce((a, b) => a + b, 0) / cpuSamples.length).toFixed(1) : "N/A";
+      const maxCpu = cpuSamples.length > 0 ? Math.max(...cpuSamples).toFixed(1) : "N/A";
+      const avgMem = memorySamples.length > 0 ? (memorySamples.reduce((a, b) => a + b, 0) / memorySamples.length).toFixed(0) : "N/A";
+      const maxMem = memorySamples.length > 0 ? Math.max(...memorySamples) : "N/A";
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            packageName,
+            durationSec,
+            samples,
+            cpu: {
+              average: `${avgCpu}%`,
+              max: `${maxCpu}%`,
+              samples: cpuSamples.map(c => c.toFixed(1))
+            },
+            memory: {
+              average: `${avgMem} MB`,
+              max: `${maxMem} MB`,
+              samples: memorySamples.map(m => m.toString())
+            }
+          }, null, 2)
+        }]
+      };
     }
 
     if (name === "analyze_logs") {
