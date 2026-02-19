@@ -365,10 +365,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           { encoding: "buffer", stripFinalNewline: false }
         );
         const base64 = (stdout as unknown as Buffer).toString("base64");
+        const dataUrl = `data:image/png;base64,${base64}`;
         return {
           content: [
             { type: "text", text: "Screenshot captured:" },
-            { type: "image", data: base64, mimeType: "image/png" }
+            { type: "image", data: dataUrl, mimeType: "image/png" }
           ]
         };
       }
@@ -611,10 +612,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         fs.unlinkSync(tempFile);
 
         const base64 = buffer.toString("base64");
+        const dataUrl = `data:image/png;base64,${base64}`;
         return {
           content: [
             { type: "text", text: "Screenshot captured:" },
-            { type: "image", data: base64, mimeType: "image/png" }
+            { type: "image", data: dataUrl, mimeType: "image/png" }
           ]
         };
       }
