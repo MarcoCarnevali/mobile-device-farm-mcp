@@ -1,13 +1,9 @@
 name: Publish to npm
 
 on:
+  # Release: Publish stable version (latest tag)
   release:
     types: [published]
-<<<<<<< HEAD
-
-jobs:
-  publish:
-=======
   
   # Push to main: Publish beta version (beta tag)
   push:
@@ -30,7 +26,6 @@ jobs:
   publish-stable:
     # Run on releases or manual trigger with 'stable' option
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_type == 'stable')
->>>>>>> 98d4089 (ci: Add manual workflow trigger)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -48,12 +43,10 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Publish to npm
+      - name: Publish stable to npm
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-<<<<<<< HEAD
-=======
 
   publish-beta:
     # Run on push to main or manual trigger with 'beta' option
@@ -100,4 +93,3 @@ jobs:
               commit_sha: context.sha,
               body: `🚀 Beta version published: \`mobile-device-farm-mcp@${version}\`\n\nInstall with:\`npm install -g mobile-device-farm-mcp@beta\``
             })
->>>>>>> 98d4089 (ci: Add manual workflow trigger)
