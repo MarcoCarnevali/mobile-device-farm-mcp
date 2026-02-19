@@ -11,6 +11,7 @@ A Model Context Protocol (MCP) server that gives AI agents direct control over A
 - **Touch:** Simulate taps on Android (iOS touch simulation requires more complex setup like `idb`, currently supported via standard Xkcd simctl for basic ops).
 
 ## Prerequisites
+- **Auto-Detect:** The server attempts to find `adb` in standard macOS/Linux locations if not in PATH.
 
 1.  **Android:**
     - `adb` must be installed and in your system PATH.
@@ -45,7 +46,7 @@ A Model Context Protocol (MCP) server that gives AI agents direct control over A
 
 ## Tools
 - `analyze_logs(deviceId, mode)`: Get logs filtered by mode (crash, anr, network).
-
+- `open_deep_link(url, deviceId, platform)`: Open a URL or Deep Link (Android/iOS).
 - `list_devices`: List all available targets.
 - `adb_install(apkPath)`: Install an APK.
 - `adb_screenshot(deviceId)`: See what's on screen.
