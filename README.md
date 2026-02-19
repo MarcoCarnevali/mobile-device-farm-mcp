@@ -45,6 +45,7 @@ A Model Context Protocol (MCP) server that gives AI agents direct control over A
     **Note:** You MUST pass the correct `PATH` environment variable so the script can find `adb` and `xcrun`.
 
 ## Tools
+- `open_deep_link(url, deviceId, platform)`: Open a URL or Deep Link (Android/iOS).
 
 - `list_devices`: List all available targets.
 - `adb_install(apkPath)`: Install an APK.

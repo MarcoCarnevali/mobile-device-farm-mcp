@@ -144,6 +144,19 @@ const TOOLS: Tool[] = [
           required: ["packageName"]
       }
   },
+  {
+      name: "open_deep_link",
+      description: "Open a deep link or URL on the device.",
+      inputSchema: {
+          type: "object",
+          properties: {
+              deviceId: { type: "string" },
+              url: { type: "string", description: "URL to open (e.g. myapp://path or https://google.com)" },
+              platform: { type: "string", enum: ["android", "ios"], default: "android" }
+          },
+          required: ["url"]
+      }
+  },
 
   // --- iOS (Simulators) ---
   {
@@ -391,6 +404,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 }, null, 2) }]
             };
         }
+    }
+
+    if (name === "open_deep_link") {
+        const url = args?.url as string;
+        const platform = (args?.platform as string) || "android";
+        const deviceId = args?.deviceId as string;
+        
+        if (platform === "android") {
+            const adbArgs = deviceId ? ["-s", deviceId] : [];
+            await run("adb", [...adbArgs, "shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", url]);
+        } else if (platform === "ios") {
+            if (!deviceId) throw new Error("deviceId required for iOS");
+            await run("xcrun", ["simctl", "openurl", deviceId, url]);
+        }
+        return { content: [{ type: "text", text: `Opened ${url} on ${platform} device` }] };
     }
 
     // --- iOS ---
