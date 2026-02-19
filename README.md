@@ -20,29 +20,68 @@ A Model Context Protocol (MCP) server that gives AI agents direct control over A
     - Xcode and Command Line Tools installed (`xcode-select --install`).
     - Simulators must be booted (`xcrun simctl boot <UUID>`).
 
-## Setup
+## Installation
 
-1.  Clone this repo.
-2.  Install dependencies:
-    ```bash
-    npm install
-    npm run build
-    ```
-3.  Add to your Agent configuration (e.g., Claude Desktop config):
-    ```json
-    {
-      "mcpServers": {
-        "device-farm": {
-          "command": "node",
-          "args": ["/path/to/device-farm-mcp/dist/index.js"],
-          "env": {
-            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin:/Users/yourname/Library/Android/sdk/platform-tools"
-          }
-        }
-      }
+### Option 1: Using npx (Recommended - No install required)
+```bash
+npx mobile-device-farm-mcp
+```
+
+### Option 2: Global installation
+```bash
+npm install -g mobile-device-farm-mcp
+mobile-device-farm-mcp
+```
+
+### Option 3: Clone and build locally
+```bash
+git clone https://github.com/MarcoCarnevali/mobile-device-farm-mcp.git
+cd mobile-device-farm-mcp
+npm install
+npm run build
+```
+
+## MCP Configuration
+
+Add to your MCP client configuration (e.g., Claude Desktop):
+
+### Option A: Using npx (Recommended)
+```json
+{
+  "mcpServers": {
+    "device-farm": {
+      "command": "npx",
+      "args": ["-y", "mobile-device-farm-mcp"]
     }
-    ```
-    **Note:** You MUST pass the correct `PATH` environment variable so the script can find `adb` and `xcrun`.
+  }
+}
+```
+
+### Option B: Using global install
+```json
+{
+  "mcpServers": {
+    "device-farm": {
+      "command": "mobile-device-farm-mcp"
+    }
+  }
+}
+```
+
+### Option C: Local install
+If you cloned the repo, use the local path:
+```json
+{
+  "mcpServers": {
+    "device-farm": {
+      "command": "node",
+      "args": ["/path/to/mobile-device-farm-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+**Note:** The server automatically detects Android SDK and Xcode tools in standard locations.
 
 ## Tools
 - `analyze_logs(deviceId, mode)`: Get logs filtered by mode (crash, anr, network).
