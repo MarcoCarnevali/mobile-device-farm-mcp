@@ -170,6 +170,19 @@ const TOOLS: Tool[] = [
           required: ["packageName"]
       }
   },
+  {
+      name: "record_video",
+      description: "Record a short video of the device screen.",
+      inputSchema: {
+          type: "object",
+          properties: {
+              deviceId: { type: "string" },
+              durationSec: { type: "number", default: 5, description: "Duration in seconds (max 60)" },
+              platform: { type: "string", enum: ["android", "ios"], default: "android" }
+          },
+          required: ["deviceId"]
+      }
+  },
 
   // --- iOS (Simulators) ---
   {
@@ -472,22 +485,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const deviceId = args?.deviceId as string;
         const adbArgs = deviceId ? ["-s", deviceId] : [];
         
-        // Run monkey. Note: This can block for a while if events is high.
-        // We might want to return the output.
-        // -v -v gives more details.
-        // --ignore-crashes? Maybe not, we want to know if it crashed.
-        // --monitor-native-crashes
-        
         try {
             const monkeyOut = (await run("adb", [...adbArgs, "shell", "monkey", "-p", packageName, "-v", events.toString()])) as unknown as string;
             return { 
                 content: [
                     { type: "text", text: `Chaos Monkey finished ${events} events.` },
-                    { type: "text", text: monkeyOut } // Include full output so LLM can parse "CRASH"
+                    { type: "text", text: monkeyOut }
                 ] 
             };
         } catch (e: any) {
-            // Monkey exits with error if app crashes? Actually it usually prints crash stats and exits non-zero sometimes.
             return {
                 content: [
                     { type: "text", text: `Monkey terminated early (Crash detected?):` },
@@ -496,6 +502,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 isError: true
             };
         }
+    }
+
+    if (name === "record_video") {
+        const duration = (args?.durationSec as number) || 5;
+        const platform = (args?.platform as string) || "android";
+        const deviceId = args?.deviceId as string;
+        
+        if (duration > 60) throw new Error("Max duration is 60 seconds");
+
+        const fs = await import("fs");
+        const path = await import("path");
+        const os = await import("os");
+        const tempPath = path.join(os.tmpdir(), `rec_${Date.now()}.mp4`);
+
+        if (platform === "android") {
+            const adbArgs = deviceId ? ["-s", deviceId] : [];
+            await run("adb", [...adbArgs, "shell", "screenrecord", "--time-limit", duration.toString(), "/sdcard/mcp_rec.mp4"]);
+            await run("adb", [...adbArgs, "pull", "/sdcard/mcp_rec.mp4", tempPath]);
+            await run("adb", [...adbArgs, "shell", "rm", "/sdcard/mcp_rec.mp4"]);
+        } else if (platform === "ios") {
+            if (!deviceId) throw new Error("deviceId required for iOS");
+            const subprocess = execa("xcrun", ["simctl", "io", deviceId, "recordVideo", tempPath]);
+            await new Promise(resolve => setTimeout(resolve, duration * 1000));
+            subprocess.kill("SIGINT");
+            try {
+                await subprocess;
+            } catch (e) {
+                // Expected to exit with signal
+            }
+        }
+
+        const videoBuffer = fs.readFileSync(tempPath);
+        const base64 = videoBuffer.toString("base64");
+        fs.unlinkSync(tempPath);
+
+        return {
+            content: [
+                { type: "text", text: `Video recorded (${duration}s). Size: ${(base64.length/1024/1024).toFixed(2)} MB` },
+                { type: "image", data: base64, mimeType: "video/mp4" }
+            ]
+        };
     }
 
     // --- iOS ---
