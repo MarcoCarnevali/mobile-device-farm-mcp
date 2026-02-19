@@ -81,6 +81,30 @@ If you cloned the repo, use the local path:
 }
 ```
 
+### Option D: Codex CLI
+Add to your `~/.codex/config.yaml`:
+```yaml
+mcpServers:
+  device-farm:
+    command: npx
+    args: ["-y", "mobile-device-farm-mcp"]
+```
+
+Or with global install:
+```yaml
+mcpServers:
+  device-farm:
+    command: mobile-device-farm-mcp
+```
+
+### Option E: Codex App (macOS)
+In the Codex app, go to Settings > MCP Servers and add:
+- **Name:** device-farm
+- **Command:** `npx -y mobile-device-farm-mcp`
+
+Or if installed globally:
+- **Command:** `mobile-device-farm-mcp`
+
 **Note:** The server automatically detects Android SDK and Xcode tools in standard locations.
 
 ## Tools
