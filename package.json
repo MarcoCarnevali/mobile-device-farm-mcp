@@ -2,6 +2,10 @@
   "name": "mobile-device-farm-mcp",
   "version": "1.0.0",
   "description": "Control Android and iOS devices via MCP",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MarcoCarnevali/mobile-device-farm-mcp"
+  },
   "main": "dist/index.js",
   "bin": {
     "mobile-device-farm-mcp": "./dist/index.js"
