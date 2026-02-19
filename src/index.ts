@@ -157,6 +157,19 @@ const TOOLS: Tool[] = [
       required: ["url"]
     }
   },
+  {
+      name: "run_monkey",
+      description: "Run a Chaos Monkey stress test (Android only).",
+      inputSchema: {
+          type: "object",
+          properties: {
+              deviceId: { type: "string" },
+              packageName: { type: "string" },
+              events: { type: "number", default: 500, description: "Number of random events to trigger" }
+          },
+          required: ["packageName"]
+      }
+  },
 
   // --- iOS (Simulators) ---
   {
@@ -451,6 +464,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return {
         content: [{ type: "text", text: filtered.length > 0 ? filtered.join("\n") : "No matching logs found." }]
       };
+    }
+
+    if (name === "run_monkey") {
+        const packageName = args?.packageName as string;
+        const events = (args?.events as number) || 500;
+        const deviceId = args?.deviceId as string;
+        const adbArgs = deviceId ? ["-s", deviceId] : [];
+        
+        // Run monkey. Note: This can block for a while if events is high.
+        // We might want to return the output.
+        // -v -v gives more details.
+        // --ignore-crashes? Maybe not, we want to know if it crashed.
+        // --monitor-native-crashes
+        
+        try {
+            const monkeyOut = (await run("adb", [...adbArgs, "shell", "monkey", "-p", packageName, "-v", events.toString()])) as unknown as string;
+            return { 
+                content: [
+                    { type: "text", text: `Chaos Monkey finished ${events} events.` },
+                    { type: "text", text: monkeyOut } // Include full output so LLM can parse "CRASH"
+                ] 
+            };
+        } catch (e: any) {
+            // Monkey exits with error if app crashes? Actually it usually prints crash stats and exits non-zero sometimes.
+            return {
+                content: [
+                    { type: "text", text: `Monkey terminated early (Crash detected?):` },
+                    { type: "text", text: e.message || "Unknown error" }
+                ],
+                isError: true
+            };
+        }
     }
 
     // --- iOS ---
