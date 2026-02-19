@@ -27,9 +27,16 @@ A Model Context Protocol (MCP) server that gives AI agents direct control over A
 npx mobile-device-farm-mcp
 ```
 
-### Option 2: Global installation
+### Option 2: Global installation (Stable)
 ```bash
 npm install -g mobile-device-farm-mcp
+mobile-device-farm-mcp
+```
+
+### Option 2b: Beta/Bleeding Edge
+Get the latest features from main branch:
+```bash
+npm install -g mobile-device-farm-mcp@beta
 mobile-device-farm-mcp
 ```
 
