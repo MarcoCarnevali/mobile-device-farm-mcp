@@ -15,8 +15,24 @@ import os from "os";
 
 dotenv.config();
 
+// Helper: Check if command exists in PATH
+function commandExists(command: string): boolean {
+  try {
+    const { execSync } = require('child_process');
+    execSync(`which ${command}`, { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Helper: Auto-detect Android SDK if not in PATH
-function detectAndroidSdk() {
+function detectAndroidSdk(): boolean {
+  // Check if adb is already in PATH
+  if (commandExists('adb')) {
+    return true;
+  }
+
   const home = os.homedir();
   const commonPaths = [
     path.join(home, "Library/Android/sdk/platform-tools"), // macOS
@@ -27,15 +43,22 @@ function detectAndroidSdk() {
 
   for (const p of commonPaths) {
     if (fs.existsSync(path.join(p, "adb"))) {
-      console.error(`Found Android SDK at: ${p}`);
+      console.error(`✓ Found Android SDK at: ${p}`);
       process.env.PATH = `${p}:${process.env.PATH}`;
-      return;
+      return true;
     }
   }
+  return false;
+}
+
+// Helper: Check Xcode tools
+function checkXcodeTools(): boolean {
+  return commandExists('xcrun');
 }
 
 // Initialize SDK detection on start
-detectAndroidSdk();
+const hasAdb = detectAndroidSdk();
+const hasXcode = checkXcodeTools();
 
 // Helper: Run shell command safely
 async function run(command: string, args: string[], options: any = {}) {
@@ -282,6 +305,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         } catch (e) {
           // Xcode might not be installed
         }
+      }
+
+      if (devices.length === 0) {
+        let helpText = "No devices found.\n\n";
+        if (platform === "all" || platform === "android") {
+          if (!hasAdb) {
+            helpText += "Android: ADB not found. Install Android SDK.\n";
+          } else {
+            helpText += "Android: Connect a device and run 'adb devices' to authorize.\n";
+          }
+        }
+        if (platform === "all" || platform === "ios") {
+          if (!hasXcode) {
+            helpText += "iOS: Xcode tools not found. Run 'xcode-select --install'.\n";
+          } else {
+            helpText += "iOS: Boot a simulator with 'xcrun simctl boot <UUID>'.\n";
+          }
+        }
+        return {
+          content: [{ type: "text", text: helpText }],
+        };
       }
 
       return {
@@ -553,9 +597,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+  // Print startup diagnostics
+  console.error("╔════════════════════════════════════════════════════════╗");
+  console.error("║    Mobile Device Farm MCP Server                       ║");
+  console.error("╚════════════════════════════════════════════════════════╝");
+  console.error("");
+  
+  if (hasAdb) {
+    console.error("✓ ADB (Android Debug Bridge) detected");
+  } else {
+    console.error("✗ ADB not found. Android features will not work.");
+    console.error("  Install Android SDK or ensure adb is in your PATH.");
+  }
+  
+  if (hasXcode) {
+    console.error("✓ Xcode tools (xcrun) detected - iOS Simulator support enabled");
+  } else {
+    console.error("✗ Xcode tools not found. iOS Simulator features will not work.");
+    console.error("  Install Xcode Command Line Tools: xcode-select --install");
+  }
+  
+  console.error("");
+  console.error("Use 'list_devices' tool to see available devices.");
+  console.error("─────────────────────────────────────────────────────────");
+  console.error("");
+  
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Mobile Device Farm MCP Server running on stdio");
 }
 
 main().catch((error) => {
