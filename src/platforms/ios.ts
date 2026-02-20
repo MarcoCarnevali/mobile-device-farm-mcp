@@ -40,6 +40,30 @@ export const IOS_TOOLS: Tool[] = [
       required: ['deviceId', 'bundleId'],
     },
   },
+  {
+    name: 'ios_terminate',
+    description: 'Terminate a running app on iOS Simulator.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string', description: 'Simulator UDID' },
+        bundleId: { type: 'string', description: 'App Bundle ID (e.g. com.example.app)' },
+      },
+      required: ['deviceId', 'bundleId'],
+    },
+  },
+  {
+    name: 'ios_uninstall',
+    description: 'Uninstall an app from iOS Simulator.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string', description: 'Simulator UDID' },
+        bundleId: { type: 'string', description: 'App Bundle ID (e.g. com.example.app)' },
+      },
+      required: ['deviceId', 'bundleId'],
+    },
+  },
 ];
 
 export async function handleIosTool(name: string, args: any) {
@@ -73,6 +97,18 @@ export async function handleIosTool(name: string, args: any) {
       const bundleId = args?.bundleId as string;
       await run('xcrun', ['simctl', 'launch', deviceId, bundleId]);
       return { content: [{ type: 'text', text: `Launched ${bundleId}` }] };
+    }
+
+    case 'ios_terminate': {
+      const bundleId = args?.bundleId as string;
+      await run('xcrun', ['simctl', 'terminate', deviceId, bundleId]);
+      return { content: [{ type: 'text', text: `Terminated ${bundleId}` }] };
+    }
+
+    case 'ios_uninstall': {
+      const bundleId = args?.bundleId as string;
+      await run('xcrun', ['simctl', 'uninstall', deviceId, bundleId]);
+      return { content: [{ type: 'text', text: `Uninstalled ${bundleId}` }] };
     }
 
     default:

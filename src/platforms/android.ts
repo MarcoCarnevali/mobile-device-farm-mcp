@@ -175,6 +175,52 @@ export const ANDROID_TOOLS: Tool[] = [
     },
   },
   {
+    name: 'adb_clear_app_data',
+    description: 'Clear app data and cache (reset to fresh install state).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        packageName: { type: 'string', description: 'App Bundle ID (e.g. com.example.app)' },
+      },
+      required: ['packageName'],
+    },
+  },
+  {
+    name: 'adb_grant_permissions',
+    description: 'Grant runtime permissions to an app.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        packageName: { type: 'string' },
+        permissions: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'List of permissions (e.g. android.permission.CAMERA)',
+        },
+      },
+      required: ['packageName', 'permissions'],
+    },
+  },
+  {
+    name: 'adb_revoke_permissions',
+    description: 'Revoke runtime permissions from an app.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        packageName: { type: 'string' },
+        permissions: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'List of permissions (e.g. android.permission.CAMERA)',
+        },
+      },
+      required: ['packageName', 'permissions'],
+    },
+  },
+  {
     name: 'run_monkey',
     description: 'Run a Chaos Monkey stress test (Android only).',
     inputSchema: {
@@ -426,6 +472,31 @@ export async function handleAndroidTool(name: string, args: any) {
       } catch (e) {
         return { content: [{ type: 'text', text: 'Offline (Ping command failed)' }] };
       }
+    }
+
+    case 'adb_clear_app_data': {
+      const packageName = args?.packageName as string;
+      if (!packageName) throw new Error('packageName required');
+      await run('adb', [...adbArgs, 'shell', 'pm', 'clear', packageName]);
+      return { content: [{ type: 'text', text: `Cleared data for ${packageName}` }] };
+    }
+
+    case 'adb_grant_permissions': {
+      const { packageName, permissions } = args as any;
+      if (!packageName || !Array.isArray(permissions)) throw new Error('Invalid arguments');
+      for (const perm of permissions) {
+        await run('adb', [...adbArgs, 'shell', 'pm', 'grant', packageName, perm]);
+      }
+      return { content: [{ type: 'text', text: `Granted permissions to ${packageName}: ${permissions.join(', ')}` }] };
+    }
+
+    case 'adb_revoke_permissions': {
+      const { packageName, permissions } = args as any;
+      if (!packageName || !Array.isArray(permissions)) throw new Error('Invalid arguments');
+      for (const perm of permissions) {
+        await run('adb', [...adbArgs, 'shell', 'pm', 'revoke', packageName, perm]);
+      }
+      return { content: [{ type: 'text', text: `Revoked permissions from ${packageName}: ${permissions.join(', ')}` }] };
     }
 
     case 'run_monkey': {
