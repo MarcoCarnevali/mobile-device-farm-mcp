@@ -1,6 +1,7 @@
 {
   "name": "mobile-device-farm-mcp",
   "version": "1.0.0",
+  "type": "module",
   "description": "Control Android and iOS devices via MCP",
   "repository": {
     "type": "git",
@@ -20,9 +21,18 @@
     "prepare": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts"
   },
-  "keywords": ["mcp", "android", "ios", "adb", "xcrun"],
+  "keywords": [
+    "mcp",
+    "android",
+    "ios",
+    "adb",
+    "xcrun"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -32,8 +42,15 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/node": "^22.5.4",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.19.11",
+    "eslint": "^10.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.3.0",
+    "prettier": "^3.8.1",
     "tsx": "^4.19.0",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "typescript-eslint": "^8.56.0",
+    "vitest": "^4.0.18"
   }
 }
