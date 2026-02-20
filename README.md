@@ -107,6 +107,20 @@ Or if installed globally:
 
 **Note:** The server automatically detects Android SDK and Xcode tools in standard locations.
 
+## Mobile Tester Skill 🧠
+
+To teach your AI agent how to effectively use these tools for complex testing workflows (like smoke tests, crash reproduction, and chaos engineering), load the **Mobile Tester Skill**.
+
+**How to use:**
+1.  **Gemini CLI:** Run `gemini skill add skills/mobile-tester.md` (or simply reference the file in your prompt).
+2.  **Other Agents (Claude/Codex):** Copy the content of `skills/mobile-tester.md` into your system prompt or upload it as a context file.
+
+This skill provides "recipes" for:
+- 🕵️ **Smoke Testing:** Clean install -> Launch -> Verify.
+- 💥 **Crash Reproduction:** Log clearing -> Recording -> Action -> Analysis.
+- 🌐 **Offline Mode:** Toggling WiFi to test error handling.
+- 🐵 **Chaos Testing:** Running the Android Monkey fuzzer.
+
 ## Tools
 - `analyze_logs(deviceId, mode)`: Get logs filtered by mode (crash, anr, network).
 - `open_deep_link(url, deviceId, platform)`: Open a URL or Deep Link (Android/iOS).
