@@ -1,11 +1,11 @@
 import { execa } from 'execa';
+import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
 export function commandExists(command: string): boolean {
   try {
-    const { execSync } = require('child_process');
     execSync(`which ${command}`, { stdio: 'pipe' });
     return true;
   } catch {
@@ -39,11 +39,14 @@ export function checkXcodeTools(): boolean {
   return commandExists('xcrun');
 }
 
-export async function run(command: string, args: string[], options: any = {}): Promise<string> {
+export async function run(command: string, args: string[], options: unknown = {}): Promise<string> {
   try {
-    const { stdout } = await execa(command, args, options);
+    const { stdout } = await execa(command, args, options as any);
     return stdout ?? '';
-  } catch (error: any) {
-    throw new Error(`Command failed: ${command} ${args.join(' ')}\n${error.message}`);
+  } catch (error: unknown) {
+    const err = error as Error;
+    throw new Error(`Command failed: ${command} ${args.join(' ')}\n${err.message}`, {
+      cause: error,
+    });
   }
 }

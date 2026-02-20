@@ -70,7 +70,7 @@ export const SHARED_TOOLS: Tool[] = [
   },
 ];
 
-export async function handleSharedTool(name: string, args: any) {
+export async function handleSharedTool(name: string, args: Record<string, unknown> | undefined) {
   switch (name) {
     case 'list_devices': {
       const platform = (args?.platform as string) || 'all';
@@ -95,7 +95,9 @@ export async function handleSharedTool(name: string, args: any) {
               }
             }
           }
-        } catch (e) {}
+        } catch {
+          // ignore error
+        }
       }
 
       if (platform === 'all' || platform === 'ios') {
@@ -117,7 +119,9 @@ export async function handleSharedTool(name: string, args: any) {
               }
             }
           }
-        } catch (e) {}
+        } catch {
+          // ignore error
+        }
       }
 
       if (devices.length === 0) {
@@ -162,7 +166,9 @@ export async function handleSharedTool(name: string, args: any) {
               const pssKb = parseInt(parts[1]);
               if (!isNaN(pssKb)) memorySamples.push(Math.round(pssKb / 1024));
             }
-          } catch (e) {}
+          } catch {
+            // ignore error
+          }
         } else {
           try {
             const psOut = await run('xcrun', ['simctl', 'spawn', deviceId, 'ps', 'aux']);
@@ -174,7 +180,9 @@ export async function handleSharedTool(name: string, args: any) {
               if (!isNaN(cpuVal)) cpuSamples.push(cpuVal);
               if (!isNaN(memVal)) memorySamples.push(Math.round((memVal * 1024) / 100));
             }
-          } catch (e) {}
+          } catch {
+            // ignore error
+          }
         }
         await new Promise((r) => setTimeout(r, 1000));
       }
@@ -233,7 +241,9 @@ export async function handleSharedTool(name: string, args: any) {
         subprocess.kill('SIGINT');
         try {
           await subprocess;
-        } catch (e) {}
+        } catch {
+          // ignore
+        }
       }
 
       const base64 = fs.readFileSync(tempPath).toString('base64');
