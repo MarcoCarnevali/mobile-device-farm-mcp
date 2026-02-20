@@ -85,6 +85,40 @@ export const ANDROID_TOOLS: Tool[] = [
     },
   },
   {
+    name: 'adb_force_stop',
+    description: 'Force stop an application (kill process).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        packageName: { type: 'string' },
+      },
+      required: ['packageName'],
+    },
+  },
+  {
+    name: 'adb_wifi',
+    description: 'Enable or disable WiFi on the device.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        enabled: { type: 'boolean', description: 'true to enable, false to disable' },
+      },
+      required: ['enabled'],
+    },
+  },
+  {
+    name: 'adb_network_status',
+    description: 'Check if the device has internet connectivity (pings Google DNS).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+      },
+    },
+  },
+  {
     name: 'run_monkey',
     description: 'Run a Chaos Monkey stress test (Android only).',
     inputSchema: {
@@ -246,6 +280,38 @@ export async function handleAndroidTool(name: string, args: any) {
           },
         ],
       };
+    }
+
+    case 'adb_force_stop': {
+      const packageName = args?.packageName as string;
+      if (!packageName) throw new Error('packageName required');
+      await run('adb', [...adbArgs, 'shell', 'am', 'force-stop', packageName]);
+      return { content: [{ type: 'text', text: `Force stopped ${packageName}` }] };
+    }
+
+    case 'adb_wifi': {
+      const enabled = args?.enabled as boolean;
+      await run('adb', [...adbArgs, 'shell', 'svc', 'wifi', enabled ? 'enable' : 'disable']);
+      return { content: [{ type: 'text', text: `WiFi ${enabled ? 'enabled' : 'disabled'}` }] };
+    }
+
+    case 'adb_network_status': {
+      try {
+        const pingOut = await run('adb', [...adbArgs, 'shell', 'ping', '-c', '1', '8.8.8.8']);
+        const isConnected = pingOut.includes('1 packets transmitted, 1 received');
+        return {
+          content: [
+            {
+              type: 'text',
+              text: isConnected
+                ? 'Online (Ping 8.8.8.8 successful)'
+                : 'Offline (Ping 8.8.8.8 failed)',
+            },
+          ],
+        };
+      } catch (e) {
+        return { content: [{ type: 'text', text: 'Offline (Ping command failed)' }] };
+      }
     }
 
     case 'run_monkey': {
