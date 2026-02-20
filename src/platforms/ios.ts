@@ -64,6 +64,34 @@ export const IOS_TOOLS: Tool[] = [
       required: ['deviceId', 'bundleId'],
     },
   },
+  {
+    name: 'ios_add_media',
+    description: 'Add photos or videos to the Simulator photo library.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string', description: 'Simulator UDID' },
+        localPath: { type: 'string', description: 'Local path to the media file' },
+      },
+      required: ['deviceId', 'localPath'],
+    },
+  },
+  {
+    name: 'ios_push_notification',
+    description: 'Send a remote push notification to an app on the Simulator.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string', description: 'Simulator UDID' },
+        bundleId: { type: 'string', description: 'Target app bundle ID' },
+        payload: {
+          type: 'object',
+          description: 'APNs payload (JSON)',
+        },
+      },
+      required: ['deviceId', 'bundleId', 'payload'],
+    },
+  },
 ];
 
 export async function handleIosTool(name: string, args: any) {
@@ -109,6 +137,24 @@ export async function handleIosTool(name: string, args: any) {
       const bundleId = args?.bundleId as string;
       await run('xcrun', ['simctl', 'uninstall', deviceId, bundleId]);
       return { content: [{ type: 'text', text: `Uninstalled ${bundleId}` }] };
+    }
+
+    case 'ios_add_media': {
+      const { localPath } = args;
+      await run('xcrun', ['simctl', 'addmedia', deviceId, localPath]);
+      return { content: [{ type: 'text', text: `Added media ${localPath} to ${deviceId}` }] };
+    }
+
+    case 'ios_push_notification': {
+      const { bundleId, payload } = args;
+      const tempPayloadPath = path.join(os.tmpdir(), `payload_${Date.now()}.json`);
+      fs.writeFileSync(tempPayloadPath, JSON.stringify(payload));
+      try {
+        await run('xcrun', ['simctl', 'push', deviceId, bundleId, tempPayloadPath]);
+        return { content: [{ type: 'text', text: `Sent push notification to ${bundleId}` }] };
+      } finally {
+        fs.unlinkSync(tempPayloadPath);
+      }
     }
 
     default:
