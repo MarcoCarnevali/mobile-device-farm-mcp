@@ -201,6 +201,43 @@ export const ANDROID_TOOLS: Tool[] = [
     },
   },
   {
+    name: 'adb_set_battery_level',
+    description: 'Set the simulated battery level (0-100) on the device.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        level: { type: 'number', minimum: 0, maximum: 100 },
+      },
+      required: ['level'],
+    },
+  },
+  {
+    name: 'adb_set_animations',
+    description: 'Enable, disable, or speed up system animations.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        scale: {
+          type: 'number',
+          description: 'Animation scale (0.0 for off, 1.0 for normal, 0.5 for fast)',
+        },
+      },
+      required: ['scale'],
+    },
+  },
+  {
+    name: 'adb_reboot',
+    description: 'Reboot the Android device.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+      },
+    },
+  },
+  {
     name: 'adb_clear_app_data',
     description: 'Clear app data and cache (reset to fresh install state).',
     inputSchema: {
@@ -518,6 +555,26 @@ export async function handleAndroidTool(name: string, args: any) {
       } catch {
         return { content: [{ type: 'text', text: 'Offline (Ping command failed)' }] };
       }
+    }
+
+    case 'adb_set_battery_level': {
+      const level = args?.level as number;
+      await run('adb', [...adbArgs, 'shell', 'dumpsys', 'battery', 'set', 'level', level.toString()]);
+      return { content: [{ type: 'text', text: `Simulated battery level set to ${level}%` }] };
+    }
+
+    case 'adb_set_animations': {
+      const scale = args?.scale as number;
+      const s = scale.toString();
+      await run('adb', [...adbArgs, 'shell', 'settings', 'put', 'global', 'window_animation_scale', s]);
+      await run('adb', [...adbArgs, 'shell', 'settings', 'put', 'global', 'transition_animation_scale', s]);
+      await run('adb', [...adbArgs, 'shell', 'settings', 'put', 'global', 'animator_duration_scale', s]);
+      return { content: [{ type: 'text', text: `Animation scales set to ${scale}` }] };
+    }
+
+    case 'adb_reboot': {
+      await run('adb', [...adbArgs, 'reboot']);
+      return { content: [{ type: 'text', text: 'Device is rebooting...' }] };
     }
 
     case 'adb_clear_app_data': {
