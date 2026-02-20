@@ -1,6 +1,9 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { run } from '../common/utils.js';
 import { execa } from 'execa';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 export const ANDROID_TOOLS: Tool[] = [
   {
@@ -22,6 +25,16 @@ export const ANDROID_TOOLS: Tool[] = [
       type: 'object',
       properties: {
         deviceId: { type: 'string', description: 'Target device serial' },
+      },
+    },
+  },
+  {
+    name: 'adb_get_ui_hierarchy',
+    description: 'Get the current UI hierarchy (XML) to inspect elements and find coordinates.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
       },
     },
   },
@@ -185,6 +198,21 @@ export async function handleAndroidTool(name: string, args: any) {
       const apkPath = args?.apkPath as string;
       await run('adb', [...adbArgs, 'install', '-r', apkPath]);
       return { content: [{ type: 'text', text: `Successfully installed ${apkPath}` }] };
+    }
+
+    case 'adb_get_ui_hierarchy': {
+      const tempPath = path.join(os.tmpdir(), `dump_${Date.now()}.xml`);
+      // 1. Dump UI XML to device storage
+      await run('adb', [...adbArgs, 'shell', 'uiautomator', 'dump', '/sdcard/window_dump.xml']);
+      // 2. Pull the file to local temp
+      await run('adb', [...adbArgs, 'pull', '/sdcard/window_dump.xml', tempPath]);
+      // 3. Clean up device storage
+      await run('adb', [...adbArgs, 'shell', 'rm', '/sdcard/window_dump.xml']);
+
+      const xmlContent = fs.readFileSync(tempPath, 'utf-8');
+      fs.unlinkSync(tempPath);
+
+      return { content: [{ type: 'text', text: xmlContent }] };
     }
 
     case 'adb_screenshot': {
