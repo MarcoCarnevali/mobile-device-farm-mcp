@@ -151,8 +151,8 @@ export const ANDROID_TOOLS: Tool[] = [
       type: 'object',
       properties: {
         deviceId: { type: 'string' },
-      },
-    },
+      }
+    }
   },
   {
     name: 'get_app_vitals',
