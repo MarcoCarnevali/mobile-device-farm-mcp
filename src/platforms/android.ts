@@ -51,6 +51,49 @@ export const ANDROID_TOOLS: Tool[] = [
     },
   },
   {
+    name: 'adb_swipe',
+    description: 'Simulate a swipe gesture on Android screen.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        x1: { type: 'number', description: 'Start X' },
+        y1: { type: 'number', description: 'Start Y' },
+        x2: { type: 'number', description: 'End X' },
+        y2: { type: 'number', description: 'End Y' },
+        duration: { type: 'number', default: 500, description: 'Duration in ms' },
+      },
+      required: ['x1', 'y1', 'x2', 'y2'],
+    },
+  },
+  {
+    name: 'adb_input_text',
+    description: 'Input text into the currently focused field (ADB).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        text: { type: 'string', description: 'Text to type (spaces must be escaped or use %s)' },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'adb_key_event',
+    description: 'Send a key event (e.g., HOME, BACK, ENTER) to the device.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        keycode: {
+          type: 'string',
+          description: 'Key code or name (e.g., KEYCODE_HOME, 3, BACK, ENTER)',
+        },
+      },
+      required: ['keycode'],
+    },
+  },
+  {
     name: 'adb_shell',
     description: "Run a raw ADB shell command (use carefully).",
     inputSchema: {
@@ -173,6 +216,49 @@ export async function handleAndroidTool(name: string, args: any) {
       const { x, y } = args as any;
       await run('adb', [...adbArgs, 'shell', 'input', 'tap', x, y]);
       return { content: [{ type: 'text', text: `Tapped at ${x},${y}` }] };
+    }
+
+    case 'adb_swipe': {
+      const { x1, y1, x2, y2, duration = 500 } = args as any;
+      await run('adb', [
+        ...adbArgs,
+        'shell',
+        'input',
+        'swipe',
+        x1,
+        y1,
+        x2,
+        y2,
+        duration.toString(),
+      ]);
+      return { content: [{ type: 'text', text: `Swiped from (${x1},${y1}) to (${x2},${y2})` }] };
+    }
+
+    case 'adb_input_text': {
+      const text = args?.text as string;
+      const escapedText = text.replace(/ /g, '%s').replace(/'/g, "\\'"); // Basic escaping
+      await run('adb', [...adbArgs, 'shell', 'input', 'text', escapedText]);
+      return { content: [{ type: 'text', text: `Typed: "${text}"` }] };
+    }
+
+    case 'adb_key_event': {
+      let keycode = args?.keycode as string;
+      // Map common names to keycodes
+      const keyMap: Record<string, string> = {
+        HOME: 'KEYCODE_HOME',
+        BACK: 'KEYCODE_BACK',
+        ENTER: 'KEYCODE_ENTER',
+        APP_SWITCH: 'KEYCODE_APP_SWITCH',
+        MENU: 'KEYCODE_MENU',
+        VOLUME_UP: 'KEYCODE_VOLUME_UP',
+        VOLUME_DOWN: 'KEYCODE_VOLUME_DOWN',
+        POWER: 'KEYCODE_POWER',
+      };
+      if (keyMap[keycode.toUpperCase()]) {
+        keycode = keyMap[keycode.toUpperCase()];
+      }
+      await run('adb', [...adbArgs, 'shell', 'input', 'keyevent', keycode]);
+      return { content: [{ type: 'text', text: `Sent key event: ${keycode}` }] };
     }
 
     case 'adb_shell': {
