@@ -1,6 +1,9 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { run } from '../common/utils.js';
 import { execa } from 'execa';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 export const ANDROID_TOOLS: Tool[] = [
   {
@@ -22,6 +25,16 @@ export const ANDROID_TOOLS: Tool[] = [
       type: 'object',
       properties: {
         deviceId: { type: 'string', description: 'Target device serial' },
+      },
+    },
+  },
+  {
+    name: 'adb_get_ui_hierarchy',
+    description: 'Get the current UI hierarchy (XML) to inspect elements and find coordinates.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
       },
     },
   },
@@ -162,6 +175,52 @@ export const ANDROID_TOOLS: Tool[] = [
     },
   },
   {
+    name: 'adb_clear_app_data',
+    description: 'Clear app data and cache (reset to fresh install state).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        packageName: { type: 'string', description: 'App Bundle ID (e.g. com.example.app)' },
+      },
+      required: ['packageName'],
+    },
+  },
+  {
+    name: 'adb_grant_permissions',
+    description: 'Grant runtime permissions to an app.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        packageName: { type: 'string' },
+        permissions: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'List of permissions (e.g. android.permission.CAMERA)',
+        },
+      },
+      required: ['packageName', 'permissions'],
+    },
+  },
+  {
+    name: 'adb_revoke_permissions',
+    description: 'Revoke runtime permissions from an app.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string' },
+        packageName: { type: 'string' },
+        permissions: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'List of permissions (e.g. android.permission.CAMERA)',
+        },
+      },
+      required: ['packageName', 'permissions'],
+    },
+  },
+  {
     name: 'run_monkey',
     description: 'Run a Chaos Monkey stress test (Android only).',
     inputSchema: {
@@ -185,6 +244,21 @@ export async function handleAndroidTool(name: string, args: any) {
       const apkPath = args?.apkPath as string;
       await run('adb', [...adbArgs, 'install', '-r', apkPath]);
       return { content: [{ type: 'text', text: `Successfully installed ${apkPath}` }] };
+    }
+
+    case 'adb_get_ui_hierarchy': {
+      const tempPath = path.join(os.tmpdir(), `dump_${Date.now()}.xml`);
+      // 1. Dump UI XML to device storage
+      await run('adb', [...adbArgs, 'shell', 'uiautomator', 'dump', '/sdcard/window_dump.xml']);
+      // 2. Pull the file to local temp
+      await run('adb', [...adbArgs, 'pull', '/sdcard/window_dump.xml', tempPath]);
+      // 3. Clean up device storage
+      await run('adb', [...adbArgs, 'shell', 'rm', '/sdcard/window_dump.xml']);
+
+      const xmlContent = fs.readFileSync(tempPath, 'utf-8');
+      fs.unlinkSync(tempPath);
+
+      return { content: [{ type: 'text', text: xmlContent }] };
     }
 
     case 'adb_screenshot': {
@@ -398,6 +472,31 @@ export async function handleAndroidTool(name: string, args: any) {
       } catch (e) {
         return { content: [{ type: 'text', text: 'Offline (Ping command failed)' }] };
       }
+    }
+
+    case 'adb_clear_app_data': {
+      const packageName = args?.packageName as string;
+      if (!packageName) throw new Error('packageName required');
+      await run('adb', [...adbArgs, 'shell', 'pm', 'clear', packageName]);
+      return { content: [{ type: 'text', text: `Cleared data for ${packageName}` }] };
+    }
+
+    case 'adb_grant_permissions': {
+      const { packageName, permissions } = args as any;
+      if (!packageName || !Array.isArray(permissions)) throw new Error('Invalid arguments');
+      for (const perm of permissions) {
+        await run('adb', [...adbArgs, 'shell', 'pm', 'grant', packageName, perm]);
+      }
+      return { content: [{ type: 'text', text: `Granted permissions to ${packageName}: ${permissions.join(', ')}` }] };
+    }
+
+    case 'adb_revoke_permissions': {
+      const { packageName, permissions } = args as any;
+      if (!packageName || !Array.isArray(permissions)) throw new Error('Invalid arguments');
+      for (const perm of permissions) {
+        await run('adb', [...adbArgs, 'shell', 'pm', 'revoke', packageName, perm]);
+      }
+      return { content: [{ type: 'text', text: `Revoked permissions from ${packageName}: ${permissions.join(', ')}` }] };
     }
 
     case 'run_monkey': {
