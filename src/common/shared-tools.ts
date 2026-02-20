@@ -57,6 +57,18 @@ export const SHARED_TOOLS: Tool[] = [
     },
   },
   {
+    name: 'run_maestro_flow',
+    description: 'Execute a Maestro UI automation flow.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: { type: 'string', description: 'Target device serial or UDID' },
+        flowPath: { type: 'string', description: 'Path to the .yaml Maestro flow file' },
+      },
+      required: ['flowPath'],
+    },
+  },
+  {
     name: 'analyze_logs',
     description: 'Get logs filtered by mode (crash, anr, network).',
     inputSchema: {
@@ -254,6 +266,16 @@ export async function handleSharedTool(name: string, args: Record<string, unknow
           { type: 'image', data: base64, mimeType: 'video/mp4' },
         ],
       };
+    }
+
+    case 'run_maestro_flow': {
+      const { flowPath, deviceId } = args as any;
+      const maestroArgs = ['test', flowPath];
+      if (deviceId) {
+        maestroArgs.push('--device', deviceId);
+      }
+      const output = await run('maestro', maestroArgs);
+      return { content: [{ type: 'text', text: output }] };
     }
 
     case 'analyze_logs': {
