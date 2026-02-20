@@ -65,31 +65,39 @@ export const IOS_TOOLS: Tool[] = [
     },
   },
   {
-    name: 'ios_add_media',
-    description: 'Add photos or videos to the Simulator photo library.',
+    name: 'ios_manage_privacy',
+    description: 'Manage privacy permissions (grant/revoke/reset) for an app on the Simulator.',
     inputSchema: {
       type: 'object',
       properties: {
         deviceId: { type: 'string', description: 'Simulator UDID' },
-        localPath: { type: 'string', description: 'Local path to the media file' },
-      },
-      required: ['deviceId', 'localPath'],
-    },
-  },
-  {
-    name: 'ios_push_notification',
-    description: 'Send a remote push notification to an app on the Simulator.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        deviceId: { type: 'string', description: 'Simulator UDID' },
-        bundleId: { type: 'string', description: 'Target app bundle ID' },
-        payload: {
-          type: 'object',
-          description: 'APNs payload (JSON)',
+        action: {
+          type: 'string',
+          enum: ['grant', 'revoke', 'reset'],
+          description: 'Action to perform',
         },
+        service: {
+          type: 'string',
+          enum: [
+            'all',
+            'calendar',
+            'contacts-limited',
+            'contacts',
+            'location',
+            'location-always',
+            'photos-add',
+            'photos',
+            'media-library',
+            'microphone',
+            'motion',
+            'reminders',
+            'siri',
+          ],
+          description: 'The service to manage (e.g., location, photos)',
+        },
+        bundleId: { type: 'string', description: 'App Bundle ID' },
       },
-      required: ['deviceId', 'bundleId', 'payload'],
+      required: ['deviceId', 'action', 'service', 'bundleId'],
     },
   },
 ];
@@ -139,22 +147,17 @@ export async function handleIosTool(name: string, args: any) {
       return { content: [{ type: 'text', text: `Uninstalled ${bundleId}` }] };
     }
 
-    case 'ios_add_media': {
-      const { localPath } = args;
-      await run('xcrun', ['simctl', 'addmedia', deviceId, localPath]);
-      return { content: [{ type: 'text', text: `Added media ${localPath} to ${deviceId}` }] };
-    }
-
-    case 'ios_push_notification': {
-      const { bundleId, payload } = args;
-      const tempPayloadPath = path.join(os.tmpdir(), `payload_${Date.now()}.json`);
-      fs.writeFileSync(tempPayloadPath, JSON.stringify(payload));
-      try {
-        await run('xcrun', ['simctl', 'push', deviceId, bundleId, tempPayloadPath]);
-        return { content: [{ type: 'text', text: `Sent push notification to ${bundleId}` }] };
-      } finally {
-        fs.unlinkSync(tempPayloadPath);
-      }
+    case 'ios_manage_privacy': {
+      const { action, service, bundleId } = args;
+      await run('xcrun', ['simctl', 'privacy', deviceId, action, service, bundleId]);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Successfully performed '${action}' for service '${service}' on app '${bundleId}'`,
+          },
+        ],
+      };
     }
 
     default:
